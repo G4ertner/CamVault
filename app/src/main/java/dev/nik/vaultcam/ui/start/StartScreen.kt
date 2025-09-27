@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.nik.vaultcam.ui.theme.VaultCamTheme
@@ -36,11 +37,17 @@ fun StartScreen(
                 style = MaterialTheme.typography.headlineLarge
             )
             Spacer(modifier = Modifier.height(48.dp))
-            Button(onClick = onSecureCameraClick) {
+            Button(
+                modifier = Modifier.testTag("btn_camera"),
+                onClick = onSecureCameraClick
+            ) {
                 Text(text = "Secure Camera")
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onPhotoVaultClick) {
+            Button(
+                modifier = Modifier.testTag("btn_vault"),
+                onClick = onPhotoVaultClick
+            ) {
                 Text(text = "Photo Vault")
             }
         }
