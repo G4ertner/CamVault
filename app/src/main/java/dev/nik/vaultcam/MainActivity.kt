@@ -8,16 +8,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.nik.vaultcam.ui.start.StartScreen
 import dev.nik.vaultcam.ui.theme.VaultCamTheme
+import dev.nik.vaultcam.util.SecureScreens
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +38,17 @@ class MainActivity : ComponentActivity() {
 fun VaultCamApp() {
     VaultCamTheme {
         val navController = rememberNavController()
+        val backStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = backStackEntry?.destination?.route
+        val activity = LocalContext.current as? ComponentActivity
+
+        LaunchedEffect(activity, currentRoute) {
+            val secure = SecureScreens.isSecureRoute(currentRoute)
+            if (activity != null) {
+                SecureScreens.applySecureWindow(activity, secure)
+            }
+        }
+
         NavHost(
             navController = navController,
             startDestination = VaultCamDestination.Start.route
@@ -55,11 +71,9 @@ fun VaultCamApp() {
             }
             composable(
                 route = VaultCamDestination.Viewer.route,
-                arguments = listOf(
-                    navArgument(VaultCamDestination.Viewer.ARG_ID) { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val id = backStackEntry.arguments?.getString(VaultCamDestination.Viewer.ARG_ID).orEmpty()
+                arguments = listOf(navArgument(VaultCamDestination.Viewer.ARG_ID) { type = NavType.StringType })
+            ) { backStack ->
+                val id = backStack.arguments?.getString(VaultCamDestination.Viewer.ARG_ID).orEmpty()
                 PlaceholderScreen(title = "Viewer Screen: $id")
             }
         }
