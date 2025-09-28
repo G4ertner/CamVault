@@ -14,7 +14,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 class VaultRepositoryTest {
@@ -28,13 +27,13 @@ class VaultRepositoryTest {
         TinkModule.deleteKeyset(context)
         TinkModule.clearCachedAead()
         KeyStoreWrapper.clearTestState()
-        clearVaultDir(VaultRepository.getVaultDir(context))
+        VaultRepository.clearVault(context)
         aead = TinkModule.getAead(context)
     }
 
     @After
     fun tearDown() {
-        clearVaultDir(VaultRepository.getVaultDir(context))
+        VaultRepository.clearVault(context)
         TinkModule.deleteKeyset(context)
         TinkModule.clearCachedAead()
         KeyStoreWrapper.clearTestState()
@@ -52,18 +51,5 @@ class VaultRepositoryTest {
         val files = VaultRepository.getVaultDir(context).listFiles() ?: emptyArray()
         assertEquals(1, files.size)
         assertTrue(files.first().name.endsWith(".enc"))
-    }
-
-    private fun clearVaultDir(dir: File) {
-        if (!dir.exists()) {
-            dir.mkdirs()
-            return
-        }
-        dir.listFiles()?.forEach { child ->
-            if (child.isDirectory) {
-                clearVaultDir(child)
-            }
-            child.delete()
-        }
     }
 }

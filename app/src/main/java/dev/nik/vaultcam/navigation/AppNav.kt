@@ -74,7 +74,7 @@ fun AppNav(navController: NavHostController) {
         }
         composable(VaultCamDestination.Vault.route) {
             if (VaultSession.isUnlocked()) {
-                VaultScreen()
+                VaultScreen(onItemClick = { id -> navController.navigate(VaultCamDestination.Viewer.routeFor(id)) })
             } else {
                 // Show nothing while waiting; can optionally display a placeholder
                 LaunchedEffect(Unit) {
