@@ -1,14 +1,15 @@
 package dev.nik.vaultcam.auth
 
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.ui.test.assertDoesNotExist
+import android.Manifest
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import dev.nik.vaultcam.VaultCamApp
+import androidx.test.rule.GrantPermissionRule
+import dev.nik.vaultcam.MainActivity
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -19,24 +20,28 @@ import org.junit.runner.RunWith
 class BiometricGateTest {
 
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+    val composeTestRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val cameraPermission: GrantPermissionRule = GrantPermissionRule.grant(Manifest.permission.CAMERA)
 
     @Before
     fun setUp() {
         VaultSession.clear()
+        MainActivity.setBiometricLauncherOverride(FakeBiometricLauncher(result = false))
     }
 
     @After
     fun tearDown() {
         VaultSession.clear()
+        MainActivity.setBiometricLauncherOverride(null)
     }
 
     @Test
     fun vault_unlocks_on_success() {
         val fakeLauncher = FakeBiometricLauncher(result = true)
-        composeTestRule.activity.setContent {
-            VaultCamApp(biometricLauncher = fakeLauncher)
-        }
+        MainActivity.setBiometricLauncherOverride(fakeLauncher)
+        composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithTag("btn_vault").performClick()
         composeTestRule.onNodeWithTag("screen_vault").assertIsDisplayed()
@@ -46,26 +51,24 @@ class BiometricGateTest {
     @Test
     fun vault_stays_locked_on_cancel() {
         val fakeLauncher = FakeBiometricLauncher(result = false)
-        composeTestRule.activity.setContent {
-            VaultCamApp(biometricLauncher = fakeLauncher)
-        }
+        MainActivity.setBiometricLauncherOverride(fakeLauncher)
+        composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithTag("btn_vault").performClick()
         composeTestRule.onNodeWithTag("btn_camera").assertIsDisplayed()
         composeTestRule.onNodeWithTag("btn_vault").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("screen_vault").assertDoesNotExist()
+        composeTestRule.onAllNodesWithTag("screen_vault").assertCountEquals(0)
         composeTestRule.runOnIdle { assert(fakeLauncher.called) }
     }
 
     @Test
     fun camera_does_not_trigger_biometric() {
         val fakeLauncher = FakeBiometricLauncher(result = false)
-        composeTestRule.activity.setContent {
-            VaultCamApp(biometricLauncher = fakeLauncher)
-        }
+        MainActivity.setBiometricLauncherOverride(fakeLauncher)
+        composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithTag("btn_camera").performClick()
-        composeTestRule.onNodeWithTag("screen_camera").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("screen_camera_preview").assertCountEquals(1)
         composeTestRule.runOnIdle { assert(!fakeLauncher.called) }
     }
 

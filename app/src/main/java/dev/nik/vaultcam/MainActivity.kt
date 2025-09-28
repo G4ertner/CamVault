@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
@@ -25,7 +26,16 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            VaultCamApp()
+            val overrideLauncher by biometricLauncherOverrideState
+            VaultCamApp(biometricLauncher = overrideLauncher)
+        }
+    }
+
+    companion object {
+        private val biometricLauncherOverrideState = mutableStateOf<BiometricLauncher?>(null)
+
+        fun setBiometricLauncherOverride(launcher: BiometricLauncher?) {
+            biometricLauncherOverrideState.value = launcher
         }
     }
 }
