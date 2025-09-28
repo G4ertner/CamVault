@@ -35,6 +35,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,15 +59,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import dev.nik.vaultcam.crypto.TinkModule
+import dev.nik.vaultcam.data.VaultRepository
 import dev.nik.vaultcam.util.Orientation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "CameraScreen"
 
 @Composable
 fun CameraScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val appContext = remember(context) { context.applicationContext }
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = context as? Activity
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val aead = remember(appContext) { TinkModule.getAead(appContext) }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -117,86 +131,110 @@ fun CameraScreen(modifier: Modifier = Modifier) {
 
     val gridColor = Color.White.copy(alpha = 0.3f)
 
-    Surface(modifier = modifier.fillMaxSize()) {
-        if (!hasCameraPermission) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Camera permission required", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
-                        Text(text = "Grant Permission")
-                    }
-                }
-            }
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                AndroidView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("screen_camera_preview"),
-                    factory = { ctx ->
-                        PreviewView(ctx).apply {
-                            controller = cameraController
-                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                            scaleType = PreviewView.ScaleType.FILL_CENTER
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { paddingValues ->
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (!hasCameraPermission) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = "Camera permission required", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                            Text(text = "Grant Permission")
                         }
                     }
-                )
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(1f)
-                ) {
-                    drawRuleOfThirds(gridColor)
                 }
-
-                CameraControls(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 24.dp),
-                    flashMode = flashMode,
-                    onFlashToggle = {
-                        flashMode = when (flashMode) {
-                            ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_ON
-                            ImageCapture.FLASH_MODE_ON -> ImageCapture.FLASH_MODE_AUTO
-                            else -> ImageCapture.FLASH_MODE_OFF
-                        }
-                    },
-                    onFlipCamera = {
-                        cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
-                            CameraSelector.DEFAULT_FRONT_CAMERA
-                        } else {
-                            CameraSelector.DEFAULT_BACK_CAMERA
-                        }
-                    },
-                    onShutterClick = {
-                        val surfaceRotation = resolveDisplayRotation(activity)
-                        cameraController.updateImageCaptureTargetRotation(surfaceRotation)
-                        val rotationDegrees = Orientation.displayRotationToDegrees(surfaceRotation)
-                        Log.d(TAG, "Shutter pressed; displayRotation=$surfaceRotation (${rotationDegrees} deg)")
-
-                        cameraController.takePicture(
-                            executor,
-                            object : ImageCapture.OnImageCapturedCallback() {
-                                override fun onCaptureSuccess(image: ImageProxy) {
-                                    val exifOrientation = Orientation.degreesToExifOrientation(
-                                        image.imageInfo.rotationDegrees
-                                    )
-                                    Log.d(
-                                        TAG,
-                                        "Capture success; imageRotation=${image.imageInfo.rotationDegrees} exifOrientation=$exifOrientation"
-                                    )
-                                    image.close()
-                                }
-
-                                override fun onError(exception: ImageCaptureException) {
-                                    Log.e(TAG, "Capture failed", exception)
-                                }
+            } else {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("screen_camera_preview"),
+                        factory = { ctx ->
+                            PreviewView(ctx).apply {
+                                controller = cameraController
+                                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                scaleType = PreviewView.ScaleType.FILL_CENTER
                             }
-                        )
+                        }
+                    )
+
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(1f)
+                    ) {
+                        drawRuleOfThirds(gridColor)
                     }
-                )
+
+                    CameraControls(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 24.dp),
+                        flashMode = flashMode,
+                        onFlashToggle = {
+                            flashMode = when (flashMode) {
+                                ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_ON
+                                ImageCapture.FLASH_MODE_ON -> ImageCapture.FLASH_MODE_AUTO
+                                else -> ImageCapture.FLASH_MODE_OFF
+                            }
+                        },
+                        onFlipCamera = {
+                            cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
+                                CameraSelector.DEFAULT_FRONT_CAMERA
+                            } else {
+                                CameraSelector.DEFAULT_BACK_CAMERA
+                            }
+                        },
+                        onShutterClick = {
+                            val surfaceRotation = resolveDisplayRotation(activity)
+                            cameraController.updateImageCaptureTargetRotation(surfaceRotation)
+                            val rotationDegrees = Orientation.displayRotationToDegrees(surfaceRotation)
+                            Log.d(TAG, "Shutter pressed; displayRotation=$surfaceRotation (${rotationDegrees} deg)")
+
+                            cameraController.takePicture(
+                                executor,
+                                object : ImageCapture.OnImageCapturedCallback() {
+                                    override fun onCaptureSuccess(image: ImageProxy) {
+                                        val bytes = try {
+                                            image.toByteArray()
+                                        } finally {
+                                            image.close()
+                                        }
+
+                                        coroutineScope.launch {
+                                            val result = runCatching {
+                                                withContext(Dispatchers.IO) {
+                                                    VaultRepository.saveEncrypted(appContext, bytes, aead)
+                                                }
+                                            }
+                                            result.onSuccess { id ->
+                                                Log.d(TAG, "Encrypted image saved with id=$id")
+                                                snackbarHostState.showSnackbar("Saved to Vault")
+                                            }.onFailure { error ->
+                                                Log.e(TAG, "Failed to save encrypted image", error)
+                                                snackbarHostState.showSnackbar("Failed to save photo")
+                                            }
+                                        }
+                                    }
+
+                                    override fun onError(exception: ImageCaptureException) {
+                                        Log.e(TAG, "Capture failed", exception)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Capture failed")
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    )
+                }
             }
         }
     }
