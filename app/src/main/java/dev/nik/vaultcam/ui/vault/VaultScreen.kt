@@ -16,11 +16,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,12 +30,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import dev.nik.vaultcam.crypto.TinkModule
 import dev.nik.vaultcam.data.VaultItem
 import dev.nik.vaultcam.data.VaultRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -47,11 +53,31 @@ fun VaultScreen(
     var items by remember { mutableStateOf<List<VaultItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     val thumbnailCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(appContext) {
-        isLoading = true
-        items = withContext(Dispatchers.IO) { VaultRepository.listItems(appContext) }
+    val loadItems: suspend () -> Unit = {
+        val list = withContext(Dispatchers.IO) { VaultRepository.listItems(appContext) }
+        val ids = list.map { it.id }.toSet()
+        val toRemove = thumbnailCache.keys.filterNot { it in ids }
+        toRemove.forEach { thumbnailCache.remove(it) }
+        items = list
         isLoading = false
+    }
+
+    LaunchedEffect(Unit) {
+        loadItems()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isLoading = true
+                coroutineScope.launch { loadItems() }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     when {
@@ -128,7 +154,7 @@ private fun VaultGridItem(
         modifier = Modifier
             .padding(4.dp)
             .background(Color(0xFFE0E0E0), shape = MaterialTheme.shapes.small)
-            .clickable { if (thumbnail != null) onClick(item.id) }
+            .clickable(enabled = thumbnail != null) { onClick(item.id) }
             .testTag("vault_item_${item.id}"),
         contentAlignment = Alignment.Center
     ) {

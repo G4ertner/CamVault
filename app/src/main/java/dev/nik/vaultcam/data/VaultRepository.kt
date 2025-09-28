@@ -52,6 +52,11 @@ object VaultRepository {
         return aead.decrypt(cipher, associatedData)
     }
 
+    fun delete(context: Context, id: String): Boolean {
+        val file = File(getVaultDir(context), "$id.enc")
+        return file.delete()
+    }
+
     @VisibleForTesting
     internal fun clearVault(context: Context) {
         val dir = getVaultDir(context)

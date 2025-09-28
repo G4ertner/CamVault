@@ -91,7 +91,13 @@ fun AppNav(navController: NavHostController) {
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString(VaultCamDestination.Viewer.ARG_ID).orEmpty()
             if (VaultSession.isUnlocked()) {
-                ViewerScreen(id = id)
+                ViewerScreen(
+                id = id,
+                onBack = { navController.popBackStack() },
+                onDeleted = {
+                    navController.popBackStack(VaultCamDestination.Vault.route, false)
+                }
+            )
             } else {
                 LaunchedEffect(Unit) {
                     VaultSession.clear()
@@ -101,3 +107,4 @@ fun AppNav(navController: NavHostController) {
         }
     }
 }
+
