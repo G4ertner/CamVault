@@ -1,11 +1,17 @@
 package dev.nik.vaultcam.ui.camera
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
+import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
@@ -23,6 +29,7 @@ import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.FlashAuto
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,11 +55,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import dev.nik.vaultcam.util.Orientation
+
+private const val TAG = "CameraScreen"
 
 @Composable
 fun CameraScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = context as? Activity
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -81,6 +92,10 @@ fun CameraScreen(modifier: Modifier = Modifier) {
             isTapToFocusEnabled = true
             isPinchToZoomEnabled = true
         }
+    }
+
+    val executor = remember(context) {
+        ContextCompat.getMainExecutor(context)
     }
 
     var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_BACK_CAMERA) }
@@ -154,6 +169,32 @@ fun CameraScreen(modifier: Modifier = Modifier) {
                         } else {
                             CameraSelector.DEFAULT_BACK_CAMERA
                         }
+                    },
+                    onShutterClick = {
+                        val surfaceRotation = resolveDisplayRotation(activity)
+                        cameraController.updateImageCaptureTargetRotation(surfaceRotation)
+                        val rotationDegrees = Orientation.displayRotationToDegrees(surfaceRotation)
+                        Log.d(TAG, "Shutter pressed; displayRotation=$surfaceRotation (${rotationDegrees} deg)")
+
+                        cameraController.takePicture(
+                            executor,
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    val exifOrientation = Orientation.degreesToExifOrientation(
+                                        image.imageInfo.rotationDegrees
+                                    )
+                                    Log.d(
+                                        TAG,
+                                        "Capture success; imageRotation=${image.imageInfo.rotationDegrees} exifOrientation=$exifOrientation"
+                                    )
+                                    image.close()
+                                }
+
+                                override fun onError(exception: ImageCaptureException) {
+                                    Log.e(TAG, "Capture failed", exception)
+                                }
+                            }
+                        )
                     }
                 )
             }
@@ -176,15 +217,29 @@ private fun CameraControls(
     modifier: Modifier = Modifier,
     flashMode: Int,
     onFlashToggle: () -> Unit,
-    onFlipCamera: () -> Unit
+    onFlipCamera: () -> Unit,
+    onShutterClick: () -> Unit
 ) {
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         IconButton(
             modifier = Modifier.testTag("btn_flip_camera"),
             onClick = onFlipCamera,
             colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
         ) {
             Icon(imageVector = Icons.Filled.Cameraswitch, contentDescription = "Switch camera")
+        }
+
+        Spacer(modifier = Modifier.width(24.dp))
+
+        IconButton(
+            modifier = Modifier.testTag("btn_shutter"),
+            onClick = onShutterClick,
+            colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+        ) {
+            Icon(imageVector = Icons.Filled.PhotoCamera, contentDescription = "Capture photo")
         }
 
         Spacer(modifier = Modifier.width(24.dp))
@@ -207,5 +262,27 @@ private fun CameraControls(
         ) {
             Icon(imageVector = flashIcon, contentDescription = flashDescription)
         }
+    }
+}
+
+private fun resolveDisplayRotation(activity: Activity?): Int {
+    if (activity == null) return Surface.ROTATION_0
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        activity.display?.rotation ?: Surface.ROTATION_0
+    } else {
+        @Suppress("DEPRECATION")
+        activity.windowManager.defaultDisplay.rotation
+    }
+}
+
+private fun LifecycleCameraController.updateImageCaptureTargetRotation(rotation: Int) {
+    runCatching {
+        val controllerClass = CameraController::class.java
+        val field = controllerClass.getDeclaredField("mImageCapture")
+        field.isAccessible = true
+        val imageCapture = field.get(this) as? ImageCapture
+        imageCapture?.targetRotation = rotation
+    }.onFailure { error ->
+        Log.w(TAG, "Unable to update image capture rotation", error)
     }
 }

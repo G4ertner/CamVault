@@ -30,6 +30,7 @@ class CameraScreenTest {
 
         composeTestRule.onAllNodesWithTag("screen_camera_preview").assertCountEquals(1)
         composeTestRule.onNodeWithTag("btn_flip_camera").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithTag("btn_shutter").assertIsDisplayed().performClick()
         composeTestRule.onNodeWithTag("btn_flash_toggle").assertIsDisplayed().performClick()
         composeTestRule.onNodeWithTag("btn_flash_toggle").performClick()
     }
