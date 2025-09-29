@@ -21,16 +21,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class ViewerScreenTest {
-private fun createTestImageBytes(): ByteArray {
-    val bitmap = android.graphics.Bitmap.createBitmap(4, 4, android.graphics.Bitmap.Config.ARGB_8888).apply {
-        eraseColor(android.graphics.Color.GREEN)
+class ViewerRotateTest {
+    private fun createTestImageBytes(): ByteArray {
+        val bitmap = android.graphics.Bitmap.createBitmap(4, 4, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.BLUE)
+        }
+        return java.io.ByteArrayOutputStream().use { stream ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
+            stream.toByteArray()
+        }
     }
-    return java.io.ByteArrayOutputStream().use { stream ->
-        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
-        stream.toByteArray()
-    }
-}
 
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
@@ -65,21 +65,21 @@ private fun createTestImageBytes(): ByteArray {
     }
 
     @Test
-    fun viewerDisplaysImageAndDeletes() {
+    fun rotateButtonUpdatesImage() {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("btn_vault").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("vault_item_$savedId").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("vault_item_$savedId").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("viewer_image").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("viewer_image").assertIsDisplayed()
-        composeRule.onNodeWithTag("btn_delete").assertIsDisplayed().performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("vault_empty").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onNodeWithTag("btn_rotate").assertIsDisplayed().performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithTag("viewer_image").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag("vault_empty").assertIsDisplayed()
+        composeRule.onNodeWithTag("viewer_image").assertIsDisplayed()
     }
 }

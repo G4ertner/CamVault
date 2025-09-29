@@ -2,6 +2,7 @@ package dev.nik.vaultcam.auth
 
 import android.Manifest
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -44,7 +45,11 @@ class BiometricGateTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithTag("btn_vault").performClick()
-        composeTestRule.onNodeWithTag("screen_vault").assertIsDisplayed()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag("vault_grid").fetchSemanticsNodes().isNotEmpty() ||
+                composeTestRule.onAllNodesWithTag("vault_empty").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag("vault_empty", useUnmergedTree = false).assertExists()
         composeTestRule.runOnIdle { assert(fakeLauncher.called) }
     }
 
@@ -57,7 +62,8 @@ class BiometricGateTest {
         composeTestRule.onNodeWithTag("btn_vault").performClick()
         composeTestRule.onNodeWithTag("btn_camera").assertIsDisplayed()
         composeTestRule.onNodeWithTag("btn_vault").assertIsDisplayed()
-        composeTestRule.onAllNodesWithTag("screen_vault").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("vault_grid").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("vault_empty").assertCountEquals(0)
         composeTestRule.runOnIdle { assert(fakeLauncher.called) }
     }
 

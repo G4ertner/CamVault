@@ -54,6 +54,14 @@ class NavGraphTest {
         composeTestRule.onNodeWithTag("btn_camera").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("btn_vault").performClick()
-        composeTestRule.onNodeWithTag("screen_vault").assertIsDisplayed()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag("vault_grid").fetchSemanticsNodes().isNotEmpty() ||
+                composeTestRule.onAllNodesWithTag("vault_empty").fetchSemanticsNodes().isNotEmpty()
+        }
+        if (composeTestRule.onAllNodesWithTag("vault_grid").fetchSemanticsNodes().isNotEmpty()) {
+            composeTestRule.onNodeWithTag("vault_grid").assertIsDisplayed()
+        } else {
+            composeTestRule.onNodeWithTag("vault_empty").assertIsDisplayed()
+        }
     }
 }

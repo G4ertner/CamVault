@@ -1,10 +1,14 @@
 package dev.nik.vaultcam.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import com.google.crypto.tink.Aead
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 
@@ -55,6 +59,35 @@ object VaultRepository {
     fun delete(context: Context, id: String): Boolean {
         val file = File(getVaultDir(context), "$id.enc")
         return file.delete()
+    }
+
+    fun rotate(context: Context, id: String, aead: Aead): Boolean {
+        return runCatching {
+            val originalBytes = decrypt(context, id, aead)
+            val originalBitmap = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
+                ?: return false
+            val matrix = Matrix().apply { postRotate(90f) }
+            val rotatedBitmap = Bitmap.createBitmap(
+                originalBitmap,
+                0,
+                0,
+                originalBitmap.width,
+                originalBitmap.height,
+                matrix,
+                true
+            )
+            val outputStream = ByteArrayOutputStream().apply {
+                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, this)
+            }
+            val rotatedBytes = outputStream.toByteArray()
+            val cipher = aead.encrypt(rotatedBytes, id.toByteArray())
+            val outFile = File(getVaultDir(context), "$id.enc")
+            outFile.outputStream().use { it.write(cipher) }
+            true
+        }.getOrElse { error ->
+            Log.e(TAG, "Failed to rotate item $id", error)
+            false
+        }
     }
 
     @VisibleForTesting

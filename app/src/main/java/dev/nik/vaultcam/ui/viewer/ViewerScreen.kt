@@ -7,8 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -59,11 +60,12 @@ fun ViewerScreen(
     var imageBitmap by remember(id) { mutableStateOf<ImageBitmap?>(null) }
     var isLoading by remember(id) { mutableStateOf(true) }
     var loadError by remember(id) { mutableStateOf<String?>(null) }
+    var reloadToken by remember(id) { mutableStateOf(0) }
 
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    LaunchedEffect(id) {
+    LaunchedEffect(id, reloadToken) {
         isLoading = true
         loadError = null
         scale = 1f
@@ -86,10 +88,28 @@ fun ViewerScreen(
                 title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
+                    IconButton(
+                        modifier = Modifier.testTag("btn_rotate"),
+                        onClick = {
+                            coroutineScope.launch {
+                                val rotated = withContext(Dispatchers.IO) {
+                                    VaultRepository.rotate(appContext, id, aead)
+                                }
+                                if (rotated) {
+                                    reloadToken++
+                                    snackbarHostState.showSnackbar("Rotated")
+                                } else {
+                                    snackbarHostState.showSnackbar("Rotation failed")
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate")
+                    }
                     IconButton(
                         modifier = Modifier.testTag("btn_delete"),
                         onClick = {
@@ -130,7 +150,7 @@ fun ViewerScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag("viewer_image")
-                            .pointerInput(imageBitmap) {
+                            .pointerInput(imageBitmap, reloadToken) {
                                 detectTransformGestures { _, pan, zoom, _ ->
                                     scale = (scale * zoom).coerceIn(1f, 5f)
                                     offset += pan
